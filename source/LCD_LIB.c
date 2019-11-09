@@ -20,9 +20,9 @@
  * Constant definitions
  */
 #define RS_HIGH GPIOA->PDDR|=(1 << 13)	// Register Select HIGH - Data Register
-#define RS_LOW GPIOA->PDDR&=~(1 << 13)	// Register Select LOW - Instruction Register
-#define EN_HIGH GPIOD->PDDR|=(1 << 2)	// Enable signal HIGH - Starts the data read & write
-#define EN_LOW GPIOD->PDDR&=~(1 << 2)	// Enable signal LOW
+#define RS_LOW 	GPIOA->PDDR&=~(1 << 13)	// Register Select LOW - Instruction Register
+//#define EN_HIGH TPM0->CONTROLS[2].CnV=7999	// Enable signal HIGH - Starts the data read & write
+//#define EN_LOW 	TPM0->CONTROLS[2].CnV=0		// Enable signal LOW
 #define HIGH 1
 #define LOW 0
 
@@ -48,9 +48,9 @@ void delay_ms(unsigned int n)
  *  Enables data read & write when high.
  */
 void EN() {
-	EN_HIGH;
+	TPM0->CONTROLS[2].CnV=7999;
 	delay_ms(50);
-	EN_LOW;
+	TPM0->CONTROLS[2].CnV=0;
 }
 
 /*
@@ -73,10 +73,11 @@ void backLight(unsigned int state) {
  */
 void setUp(){
 	unsigned char val = 0;
-	unsigned char initLCD[8]={0x28, 0x0E, 0x06};
+	unsigned char initLCD[8]={0x03, 0x03, 0x03, 0x28, 0x0E, 0x06};
 
 	while(initLCD[val]){
 		cmd(initLCD[val]);
+		delay_ms(5);
 		val++;
 	}
 }
@@ -184,29 +185,37 @@ void btmWrite(unsigned char *message) {
  */
 void lcd_Init() {
 	SIM->SCGC5 |= (1<<9) | (1<<11) | (1<<12);	// enables clock gating: PORTA, PORTC, PORTD
+	// Setup PWM
+	SIM->SCGC6 |= (1 << 24); // Clock Enable TPM0
+	SIM->SOPT2 |= (0x2 << 24); // Set TPMSRC to OSCERCLK
 
+	// Setup Channel 5
+	TPM0->CONTROLS[2].CnSC |= (0x1 << 2) | (0x2 << 4);  // Edge PWM
+	TPM0->MOD = 7999;  //
+
+	delay_ms(50);
 	// LCD EN - D9
-    PORTD->PCR[2] &= ~0x700;	// Init clear of port a register 13
-    PORTD->PCR[2] |= 0x700 & (1 << 8);	// Set MUX bits
+    PORTD->PCR[2] &= ~0x400;	// Init clear of port a register 13
+    PORTD->PCR[2] |= 0x400;		// Drive pin with TPM0
 
 	// LCD RS - D8
     PORTA->PCR[13] &= ~0x700;	// Init clear of port a register 13
     PORTA->PCR[13] |= 0x700 & (1 << 8);	// Set MUX bits
 
 	// LCD D4
-    PORTA->PCR[4] &= ~0x700;	// Init clear of port a register 4
+    PORTA->PCR[4] &= ~0x700;	// Init clear of port a register  4
     PORTA->PCR[4] |= 0x700 & (1 << 8);	// Set MUX bits
 
 	// LCD D5
-    PORTA->PCR[5] &= ~0x700;	// Init clear of port a register 5
+    PORTA->PCR[5] &= ~0x700;	// Init clear of port a register  5
     PORTA->PCR[5] |= 0x700 & (1 << 8);	// Set MUX bits
 
 	// LCD D6
-    PORTC->PCR[8] &= ~0x700;	// Init clear of port c register 8
+    PORTC->PCR[8] &= ~0x700;	// Init clear of port c register  8
     PORTC->PCR[8] |= 0x700 & (1 << 8);	// Set MUX bits
 
 	// LCD D7
-    PORTC->PCR[9] &= ~0x700;	// Init clear of port c register 9
+    PORTC->PCR[9] &= ~0x700;	// Init clear of port c register  9
     PORTC->PCR[9] |= 0x700 & (1 << 8);	// Set MUX bits
 
 	// LCD K - D10 - Pin connected to the back light. Set to active low
@@ -214,22 +223,22 @@ void lcd_Init() {
     PORTD->PCR[4] |= 0x703 & ((1 << 8) | 0x3);	// Set MUX bits, enable pullups
 
 	// K - Turns on the backlight
-	GPIOD->PDDR	&= ~(1 << 4);	// sets to portd pin 4 to output - LCD K
+	GPIOD->PDDR	&= ~(1 << 4);	// sets portd pin 4 to output - LCD K
 	delay_ms(50);
 
+	TPM0->SC |= 0x01 << 3; // Start the clock!
+
 	// initializing, function set 4 bit operation
-    GPIOA->PDDR	&= ~(1 << 13);	// sets to porta pin 13 to LOW	 - LCD RS
-    GPIOD->PDDR	|= (1 << 2);	// sets to portd pin 2 to HIGH	 - LCD EN
+    GPIOA->PDDR	&= ~(1 << 13);	// sets porta pin 13 to LOW	 - LCD RS
+    TPM0->CONTROLS[2].CnV=0;	// sets enable pin LOW
+
+    setUp();	// initialization of LCD
     GPIOC->PDOR	&= ~(1 << 9);	// sets to portc pin 9 to LOW	 - LCD D7
     GPIOC->PDOR	&= ~(1 << 8);	// sets to portc pin 8 to LOW	 - LCD D6
     GPIOA->PDOR	|= (1 << 5);	// sets to porta pin 5 to HIGH	 - LCD D5
     GPIOA->PDOR	&= ~(1 << 4);	// sets to porta pin 4 to LOW	 - LCD D4
-    delay_ms(10);
-
-    GPIOD->PDDR	&= ~(1 << 2);	// enable off
 	delay_ms(10);
 
-	setUp();	// initialization of LCD
-	delay_ms(50);
 	cmd(0x0F);	// blink cursor
 }
+
