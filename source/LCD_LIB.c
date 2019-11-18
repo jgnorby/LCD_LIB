@@ -19,12 +19,13 @@
 /*
  * Constant definitions
  */
-#define RS_HIGH GPIOA->PDDR|=(1 << 13)	// Register Select HIGH - Data Register
-#define RS_LOW 	GPIOA->PDDR&=~(1 << 13)	// Register Select LOW - Instruction Register
-//#define EN_HIGH TPM0->CONTROLS[2].CnV=7999	// Enable signal HIGH - Starts the data read & write
-//#define EN_LOW 	TPM0->CONTROLS[2].CnV=0		// Enable signal LOW
-#define HIGH 1
-#define LOW 0
+#define LCD_SET 0x30	// manually set instructions to change modes
+#define LCD_4BIT 0x20	// 4 bit mode select
+#define LCD_2LINE 0x28	// 4 bit mode again, 2 line display
+#define LCD_DISP 0x0F	// display on, cursor on, blinking on
+#define LCD_CLEAR 0x01			// display clear
+#define LCD_INCR 0x06			// entry mode set to increment
+#define RET 0x02		// return home
 
 /*
  * Start of Function definitions
@@ -33,12 +34,10 @@
  * delay_ms():
  * A delay function in millis
  */
-void delay_ms(unsigned int n)
-{
+void delay_ms(unsigned int n){
 	unsigned int i = 0;
 	unsigned int j;
-	for(i=0; i<n*2000; i++)
-	{
+	for(i=0; i<n*2000; i++){
 		j++;
 	}
 }
@@ -48,9 +47,12 @@ void delay_ms(unsigned int n)
  *  Enables data read & write when high.
  */
 void EN() {
-	TPM0->CONTROLS[2].CnV=7999;
-	delay_ms(50);
-	TPM0->CONTROLS[2].CnV=0;
+    GPIOD->PDOR &= ~(1 << 2); 	// off
+    delay_ms(1);
+    GPIOD->PDOR |= (1 << 2); 	// on
+    delay_ms(1);
+    GPIOD->PDOR &= ~(1 << 2); 	// off
+    delay_ms(1);
 }
 
 /*
@@ -59,27 +61,38 @@ void EN() {
  */
 void backLight(unsigned int state) {
 	if(state == 0)
-		GPIOD->PDDR	|= (1 << 4);	// OFF
+		GPIOD->PDOR	|= (1 << 4);	// OFF
 	else
-		GPIOD->PDDR	&= ~(1 << 4);	// ON
+		GPIOD->PDOR	&= ~(1 << 4);	// ON
 }
 
 /*
  * setUp():
  * 	initializes the LCD by sending instructions
- * 	0x28 - Sets it to 4 bit operation and selects 2 line display
- *	0x0E - Turns on display and cursor
- *	0x06 - Sets mode to increment address by 1 and shifts cursor to the right
+ * 	0x30 - Repeat 3 times to reset for 4 bit mode, passed into data to only send a nibble
+ * 	0x20 - Sets it to 4 bit mode, passed in as a nibble.
+ * 	0x28 - Sets it to 4 bit mode and selects 2 line display
+ *	0x0C - Turns on display. Can also turn on the cursor and make it blink with 0x0F.
+ *	0x01 - Clears the display
+ *	0x02 - Returns home
  */
-void setUp(){
-	unsigned char val = 0;
-	unsigned char initLCD[8]={0x03, 0x03, 0x03, 0x28, 0x0E, 0x06};
+void setup(){
+	data(0x30);
+	delay_ms(5);
+	data(0x30);
+	delay_ms(5);
+	data(0x30);
+	delay_ms(5);
 
-	while(initLCD[val]){
-		cmd(initLCD[val]);
-		delay_ms(5);
-		val++;
-	}
+	data(0x20);
+	cmd(0x28);
+	delay_ms(1);
+	cmd(0x0C);
+	delay_ms(1);
+	cmd(0x01);
+	delay_ms(3);
+	cmd(0x02);
+	delay_ms(3);
 }
 
 /*
@@ -88,7 +101,7 @@ void setUp(){
  */
 void clear() {
 	cmd(0x01);
-	delay_ms(50);
+	delay_ms(10);
 }
 
 /*
@@ -97,12 +110,10 @@ void clear() {
  * 	passes value into data to calculate the 2 sets of nibbles.
  */
 void cmd(unsigned char val) {
-	RS_LOW;	// receive commands
+	GPIOA->PDOR &= ~(1 << 13);	//rs low
 
 	data(val&0xF0);			// first nibble
-	EN();					// a call to the enable function, that starts the data read/write
 	data((val<<4)&0xF0);	// second nibble obtained by left shifting
-	EN();
 }
 
 /*
@@ -111,12 +122,10 @@ void cmd(unsigned char val) {
  * 	passes value into data to calculate the 2 sets of nibbles.
  */
 void send(unsigned char val) {
-	RS_HIGH;
-
+	GPIOA->PDOR |= (1 << 13);
 	data(val&0xF0);			// first nibble
-	EN();					// a call to the enable function, that starts the data read/write
 	data((val<<4)&0xF0);	// second nibble obtained by left shifting
-	EN();
+	GPIOA->PDOR &= ~(1 << 13);	//rs low
 }
 
 /*
@@ -124,6 +133,7 @@ void send(unsigned char val) {
  * 	Reads in a byte and compares it to each bit.
  */
 void data(unsigned char val) {
+
 	// Bit 7
 	if(val&0x80)
 	    GPIOC->PDOR	|= (1 << 9);	// ON
@@ -147,35 +157,34 @@ void data(unsigned char val) {
 	    GPIOA->PDOR	|= (1 << 4);	// ON
 	else
 	    GPIOA->PDOR	&= ~(1 << 4);	// OFF
+	EN();
 }
 
 /*
- * msg():
- *	Reads in the characters of a message, sends each character to the send function
+ * print():
+ *	Reads in the characters of a message and takes in the cursor position.
+ *	For the top line, write a 1. For the bottom, write a 2.
+ *	Example:	print("hello",1);
+ *				print("world",2);
+ *	Output:		hello
+ *				world
  */
-void msg(unsigned char *val) {
-	while(*val) {
-		send(*val);
-		val++;
+void print(unsigned char *val, int pos) {
+	if(pos==1) {
+		cmd(0x80);	// for top line
+	}else if(pos==2){
+		cmd(0xC0);	// for bottom line
 	}
-}
 
-/*
- * topWrite():
- *	Writes to the top line.
- */
-void topWrite(unsigned char *message) {
-	cmd(0x80);	// for top line
-	msg(&message[0]);
-}
+	delay_ms(1000);
 
-/*
- * btmWrite():
- *
- */
-void btmWrite(unsigned char *message) {
-	cmd(0xC0);	// for bottom line
-	msg(&message[0]);
+    unsigned int length = strlen((const char*)val);	// length of the char string
+
+	for (int i = 0; i < length; i++){
+		unsigned char singleChar = val[i];
+		send(singleChar);
+	}
+	delay_ms(1000);
 }
 
 /*
@@ -185,18 +194,10 @@ void btmWrite(unsigned char *message) {
  */
 void lcd_Init() {
 	SIM->SCGC5 |= (1<<9) | (1<<11) | (1<<12);	// enables clock gating: PORTA, PORTC, PORTD
-	// Setup PWM
-	SIM->SCGC6 |= (1 << 24); // Clock Enable TPM0
-	SIM->SOPT2 |= (0x2 << 24); // Set TPMSRC to OSCERCLK
 
-	// Setup Channel 5
-	TPM0->CONTROLS[2].CnSC |= (0x1 << 2) | (0x2 << 4);  // Edge PWM
-	TPM0->MOD = 7999;  //
-
-	delay_ms(50);
 	// LCD EN - D9
-    PORTD->PCR[2] &= ~0x400;	// Init clear of port a register 13
-    PORTD->PCR[2] |= 0x400;		// Drive pin with TPM0
+    PORTD->PCR[2] &= ~0x700;	// Init clear of port a register 13
+    PORTD->PCR[2] |= 0x700 & (1 << 8);		// Drive pin with TPM0
 
 	// LCD RS - D8
     PORTA->PCR[13] &= ~0x700;	// Init clear of port a register 13
@@ -218,27 +219,25 @@ void lcd_Init() {
     PORTC->PCR[9] &= ~0x700;	// Init clear of port c register  9
     PORTC->PCR[9] |= 0x700 & (1 << 8);	// Set MUX bits
 
-	// LCD K - D10 - Pin connected to the back light. Set to active low
-    PORTD->PCR[4] &= ~0x703;	// Init clear of port d register 2
-    PORTD->PCR[4] |= 0x703 & ((1 << 8) | 0x3);	// Set MUX bits, enable pullups
+	// LCD K - D10 - Pin connected to the back light.
+    PORTD->PCR[4] &= ~0x700;	// Init clear of port d register 2
+    PORTD->PCR[4] |= 0x700 & (1 << 8);	// Set MUX bits, enable pullups
 
 	// K - Turns on the backlight
-	GPIOD->PDDR	&= ~(1 << 4);	// sets portd pin 4 to output - LCD K
-	delay_ms(50);
-
-	TPM0->SC |= 0x01 << 3; // Start the clock!
+	GPIOD->PDDR	|= (1 << 4);	// sets portd pin 4 to output - LCD K
+	GPIOD->PDOR |= (1 << 4);	// sets state
 
 	// initializing, function set 4 bit operation
-    GPIOA->PDDR	&= ~(1 << 13);	// sets porta pin 13 to LOW	 - LCD RS
-    TPM0->CONTROLS[2].CnV=0;	// sets enable pin LOW
+    GPIOA->PDDR |= (1 << 13);	// sets porta pin 13 to LOW	 - LCD RS
+    GPIOD->PDDR |= (1 << 2); 	// enable
 
-    setUp();	// initialization of LCD
-    GPIOC->PDOR	&= ~(1 << 9);	// sets to portc pin 9 to LOW	 - LCD D7
-    GPIOC->PDOR	&= ~(1 << 8);	// sets to portc pin 8 to LOW	 - LCD D6
-    GPIOA->PDOR	|= (1 << 5);	// sets to porta pin 5 to HIGH	 - LCD D5
-    GPIOA->PDOR	&= ~(1 << 4);	// sets to porta pin 4 to LOW	 - LCD D4
-	delay_ms(10);
+    GPIOC->PDDR	|= (1 << 9);	// sets to portc pin 9 to LOW	 - LCD D7
+    GPIOC->PDDR	|= (1 << 8);	// sets to portc pin 8 to LOW	 - LCD D6
+    GPIOA->PDDR	|= (1 << 5);	// sets to porta pin 5 to LOW	 - LCD D5
+    GPIOA->PDDR	|= (1 << 4);	// sets to porta pin 4 to LOW	 - LCD D4
 
-	cmd(0x0F);	// blink cursor
+	delay_ms(50);
+
+    GPIOA->PDOR &= ~(1 << 13);	// sets porta pin 13 to LOW	 - LCD RS
+    GPIOD->PDOR &= ~(1 << 2); 	// enable
 }
-

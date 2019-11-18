@@ -12,13 +12,11 @@
 	void delay_ms(unsigned int n);
 	void EN();
 	void backLight(unsigned int state);
-	void setUp();
+	void setup();
 	void clear();
 	void cmd(unsigned char val);
 	void send(unsigned char val);
 	void data(unsigned char val);
-	void msg(unsigned char *val);
-	void topWrite(unsigned char *message);
-	void btmWrite(unsigned char *message);
+	void print(unsigned char *val, int pos);
 	void lcd_Init();
 #endif /* LCD_LIB_H_ */
