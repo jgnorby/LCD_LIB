@@ -2,7 +2,7 @@
  * LCD_LIB.c
  *
  * @author Jennifer Norby
- * @version 10/28/2019
+ * @version 11/12/2019
  * Project 4 - Library Development
  * LCD interfacing in 4 bit mode
  */
@@ -17,24 +17,13 @@
 #include "fsl_debug_console.h"
 
 /*
- * Constant definitions
- */
-#define LCD_SET 0x30	// manually set instructions to change modes
-#define LCD_4BIT 0x20	// 4 bit mode select
-#define LCD_2LINE 0x28	// 4 bit mode again, 2 line display
-#define LCD_DISP 0x0F	// display on, cursor on, blinking on
-#define LCD_CLEAR 0x01			// display clear
-#define LCD_INCR 0x06			// entry mode set to increment
-#define RET 0x02		// return home
-
-/*
  * Start of Function definitions
  */
 /*
- * delay_ms():
+ * delay():
  * A delay function in millis
  */
-void delay_ms(unsigned int n){
+void delay(unsigned int n){
 	unsigned int i = 0;
 	unsigned int j;
 	for(i=0; i<n*2000; i++){
@@ -46,28 +35,17 @@ void delay_ms(unsigned int n){
  * EN():
  *  Enables data read & write when high.
  */
-void EN() {
+void EN(){
     GPIOD->PDOR &= ~(1 << 2); 	// off
-    delay_ms(1);
+    delay(1);
     GPIOD->PDOR |= (1 << 2); 	// on
-    delay_ms(1);
+    delay(1);
     GPIOD->PDOR &= ~(1 << 2); 	// off
-    delay_ms(1);
+    delay(1);
 }
 
 /*
- * backLight():
- * 	Controls the back lighting for the LCD.
- */
-void backLight(unsigned int state) {
-	if(state == 0)
-		GPIOD->PDOR	|= (1 << 4);	// OFF
-	else
-		GPIOD->PDOR	&= ~(1 << 4);	// ON
-}
-
-/*
- * setUp():
+ * setup():
  * 	initializes the LCD by sending instructions
  * 	0x30 - Repeat 3 times to reset for 4 bit mode, passed into data to only send a nibble
  * 	0x20 - Sets it to 4 bit mode, passed in as a nibble.
@@ -78,38 +56,39 @@ void backLight(unsigned int state) {
  */
 void setup(){
 	data(0x30);
-	delay_ms(5);
+	delay(5);
 	data(0x30);
-	delay_ms(5);
+	delay(5);
 	data(0x30);
-	delay_ms(5);
+	delay(5);
 
 	data(0x20);
 	cmd(0x28);
-	delay_ms(1);
+	delay(1);
 	cmd(0x0C);
-	delay_ms(1);
+	delay(1);
 	cmd(0x01);
-	delay_ms(3);
+	delay(3);
 	cmd(0x02);
-	delay_ms(3);
+	delay(3);
 }
 
 /*
  * clear():
- * 	Clears the display
+ * 	Clears the entire display
  */
-void clear() {
+void clear(){
 	cmd(0x01);
-	delay_ms(10);
+	delay(10);
 }
 
 /*
  * cmd():
  * 	Takes in a value, selects the instruction register by setting RS to low,
- * 	passes value into data to calculate the 2 sets of nibbles.
+ * 	passes value into data to calculate the 2 nibbles.
+ * 	Example:	cmd(0x01); will clear the display
  */
-void cmd(unsigned char val) {
+void cmd(unsigned char val){
 	GPIOA->PDOR &= ~(1 << 13);	//rs low
 
 	data(val&0xF0);			// first nibble
@@ -119,9 +98,10 @@ void cmd(unsigned char val) {
 /*
  * send():
  * 	Takes in a value to send, selects the data register by setting RS to high,
- * 	passes value into data to calculate the 2 sets of nibbles.
+ * 	passes value into data to calculate the 2 nibbles, then sets RS low.
+ * 	Example:	send('H'); will print the letter H to the display
  */
-void send(unsigned char val) {
+void send(unsigned char val){
 	GPIOA->PDOR |= (1 << 13);
 	data(val&0xF0);			// first nibble
 	data((val<<4)&0xF0);	// second nibble obtained by left shifting
@@ -130,10 +110,11 @@ void send(unsigned char val) {
 
 /*
  * data():
- * 	Reads in a byte and compares it to each bit.
+ * 	Reads in a byte, but only compares the left nibble to each bit.
+ * 	Example:	data(0xF0); will drive all 4 pins HIGH
+ * 				data(0x0F);	will drive all 4 pins LOW
  */
-void data(unsigned char val) {
-
+void data(unsigned char val){
 	// Bit 7
 	if(val&0x80)
 	    GPIOC->PDOR	|= (1 << 9);	// ON
@@ -157,6 +138,7 @@ void data(unsigned char val) {
 	    GPIOA->PDOR	|= (1 << 4);	// ON
 	else
 	    GPIOA->PDOR	&= ~(1 << 4);	// OFF
+
 	EN();
 }
 
@@ -169,14 +151,13 @@ void data(unsigned char val) {
  *	Output:		hello
  *				world
  */
-void print(unsigned char *val, int pos) {
-	if(pos==1) {
-		cmd(0x80);	// for top line
+void print(unsigned char *val, int pos){
+	if(pos==1){
+		cmd(0x80);		// for top line
 	}else if(pos==2){
-		cmd(0xC0);	// for bottom line
+		cmd(0xC0);		// for bottom line
 	}
-
-	delay_ms(1000);
+	delay(50);			// give it time to register the command before writing to the screen
 
     unsigned int length = strlen((const char*)val);	// length of the char string
 
@@ -184,7 +165,7 @@ void print(unsigned char *val, int pos) {
 		unsigned char singleChar = val[i];
 		send(singleChar);
 	}
-	delay_ms(1000);
+	delay(1000);
 }
 
 /*
@@ -197,7 +178,7 @@ void lcd_Init() {
 
 	// LCD EN - D9
     PORTD->PCR[2] &= ~0x700;	// Init clear of port a register 13
-    PORTD->PCR[2] |= 0x700 & (1 << 8);		// Drive pin with TPM0
+    PORTD->PCR[2] |= 0x700 & (1 << 8);	// Set MUX bits
 
 	// LCD RS - D8
     PORTA->PCR[13] &= ~0x700;	// Init clear of port a register 13
@@ -220,24 +201,24 @@ void lcd_Init() {
     PORTC->PCR[9] |= 0x700 & (1 << 8);	// Set MUX bits
 
 	// LCD K - D10 - Pin connected to the back light.
-    PORTD->PCR[4] &= ~0x700;	// Init clear of port d register 2
+    PORTD->PCR[4] &= ~0x700;	// Init clear of port d register 4
     PORTD->PCR[4] |= 0x700 & (1 << 8);	// Set MUX bits, enable pullups
 
 	// K - Turns on the backlight
 	GPIOD->PDDR	|= (1 << 4);	// sets portd pin 4 to output - LCD K
 	GPIOD->PDOR |= (1 << 4);	// sets state
 
-	// initializing, function set 4 bit operation
-    GPIOA->PDDR |= (1 << 13);	// sets porta pin 13 to LOW	 - LCD RS
+	// initializes all pins to output
+    GPIOA->PDDR |= (1 << 13);	// sets porta pin 13 to output	 - LCD RS
     GPIOD->PDDR |= (1 << 2); 	// enable
 
-    GPIOC->PDDR	|= (1 << 9);	// sets to portc pin 9 to LOW	 - LCD D7
-    GPIOC->PDDR	|= (1 << 8);	// sets to portc pin 8 to LOW	 - LCD D6
-    GPIOA->PDDR	|= (1 << 5);	// sets to porta pin 5 to LOW	 - LCD D5
-    GPIOA->PDDR	|= (1 << 4);	// sets to porta pin 4 to LOW	 - LCD D4
+    GPIOC->PDDR	|= (1 << 9);	// sets portc pin 9 to output	 - LCD D7
+    GPIOC->PDDR	|= (1 << 8);	// sets portc pin 8 to output	 - LCD D6
+    GPIOA->PDDR	|= (1 << 5);	// sets porta pin 5 to output	 - LCD D5
+    GPIOA->PDDR	|= (1 << 4);	// sets porta pin 4 to output	 - LCD D4
 
-	delay_ms(50);
+	delay(50);
 
     GPIOA->PDOR &= ~(1 << 13);	// sets porta pin 13 to LOW	 - LCD RS
-    GPIOD->PDOR &= ~(1 << 2); 	// enable
+    GPIOD->PDOR &= ~(1 << 2); 	// sets enable to LOW
 }

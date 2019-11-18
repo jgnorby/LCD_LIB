@@ -9,9 +9,8 @@
 
 #ifndef LCD_LIB_H_
 #define LCD_LIB_H_
-	void delay_ms(unsigned int n);
+	void delay(unsigned int n);
 	void EN();
-	void backLight(unsigned int state);
 	void setup();
 	void clear();
 	void cmd(unsigned char val);
