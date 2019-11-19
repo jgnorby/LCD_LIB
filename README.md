@@ -9,13 +9,16 @@ The print function is used as follows:
 Reads in the characters of a message and takes in the cursor position.
 To write on the top line, write a 1. For the bottom, write a 2.
  
-Example:	
+Example:
+```	
 		print("hello",1);
  		print("world",2);
-Output:		
+```
+Output:	
+```	
 		hello
  		world
- 				
+```				
 The compiler might yell at you if you just write a sentence in quotes.
 I suggest creating an unsigned char * variable and pass in the variable like so:
 
