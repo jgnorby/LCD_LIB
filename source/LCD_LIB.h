@@ -17,5 +17,6 @@
 	void send(unsigned char val);
 	void data(unsigned char val);
 	void print(unsigned char *val, int pos);
+	char *dtostrf (double val, signed char width, unsigned char prec, char *sout);
 	void lcd_Init();
 #endif /* LCD_LIB_H_ */

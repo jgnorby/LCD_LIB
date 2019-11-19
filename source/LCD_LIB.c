@@ -169,12 +169,24 @@ void print(unsigned char *val, int pos){
 }
 
 /*
+ * dtostrf
+ * A function that converts double to string
+ */
+char *dtostrf (double val, signed char width, unsigned char prec, char *sout) {
+  uint32_t leftDec = (uint32_t)val;
+  uint32_t rightDec = (uint32_t)((val - (double)leftDec) * pow(10, prec));
+
+  sprintf(sout, "%d.%d", leftDec, rightDec);
+  return sout;
+}
+
+/*
  * lcdInit():
  * Enables clock gating for all ports and initializes all pins for the LCD
  *
  */
 void lcd_Init() {
-	SIM->SCGC5 |= (1<<9) | (1<<11) | (1<<12);	// enables clock gating: PORTA, PORTC, PORTD
+	SIM->SCGC5 |= (1<<9) | (1<<10) | (1<<11) | (1<<12);	// enables clock gating: PORTA, PORTC, PORTD
 
 	// LCD EN - D9
     PORTD->PCR[2] &= ~0x700;	// Init clear of port a register 13
