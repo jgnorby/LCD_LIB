@@ -143,6 +143,85 @@ void data(unsigned char val){
 }
 
 /*
+ * setCursor():
+ * 	Reads in the position of cursor and location (top line = 1, bottom line = 2)
+ * 	to
+ */
+void setCursor(int pos, int loc){
+	if(loc==1) {
+		switch(pos){
+			case 1: cmd(0x80);
+					break;
+			case 2: cmd(0x81);
+					break;
+			case 3:	cmd(0x82);
+					break;
+			case 4:	cmd(0x83);
+					break;
+			case 5:	cmd(0x84);
+					break;
+			case 6:	cmd(0x85);
+					break;
+			case 7: cmd(0x86);
+					break;
+			case 8:	cmd(0x87);
+					break;
+			case 9: cmd(0x88);
+					break;
+			case 10:	cmd(0x8A);
+						break;
+			case 11:	cmd(0x8B);
+						break;
+			case 12:	cmd(0x8C);
+						break;
+			case 13:	cmd(0x8D);
+						break;
+			case 14:	cmd(0x8E);
+						break;
+			case 15: 	cmd(0x8F);
+						break;
+			default:	cmd(0x80);
+						break;
+		}
+	} else if (loc==2) {
+		switch(pos){
+			case 1: cmd(0xC0);
+					break;
+			case 2: cmd(0xC1);
+					break;
+			case 3:	cmd(0xC2);
+					break;
+			case 4:	cmd(0xC3);
+					break;
+			case 5:	cmd(0xC4);
+					break;
+			case 6:	cmd(0xC5);
+					break;
+			case 7: cmd(0xC6);
+					break;
+			case 8:	cmd(0xC7);
+					break;
+			case 9: cmd(0xC8);
+					break;
+			case 10:	cmd(0xCA);
+						break;
+			case 11:	cmd(0xCB);
+						break;
+			case 12:	cmd(0xCC);
+						break;
+			case 13:	cmd(0xCD);
+						break;
+			case 14:	cmd(0xCE);
+						break;
+			case 15: 	cmd(0xCF);
+						break;
+			default:	cmd(0xC0);
+						break;
+		}
+	}
+	delay(50);
+}
+/*
  * print():
  *	Reads in the characters of a message and takes in the cursor position.
  *	For the top line, write a 1. For the bottom, write a 2.
@@ -151,14 +230,7 @@ void data(unsigned char val){
  *	Output:		hello
  *				world
  */
-void print(unsigned char *val, int pos){
-	if(pos==1){
-		cmd(0x80);		// for top line
-	}else if(pos==2){
-		cmd(0xC0);		// for bottom line
-	}
-	delay(50);			// give it time to register the command before writing to the screen
-
+void print(unsigned char *val){
     unsigned int length = strlen((const char*)val);	// length of the char string
 
 	for (int i = 0; i < length; i++){
