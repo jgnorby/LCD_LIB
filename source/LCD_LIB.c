@@ -145,7 +145,8 @@ void data(unsigned char val){
 /*
  * setCursor():
  * 	Reads in the position of cursor and location (top line = 1, bottom line = 2)
- * 	to
+ * 	Example:	For the beginning of the line on the top line.
+ * 				setCursor(1,1);
  */
 void setCursor(int pos, int loc){
 	if(loc==1) {
